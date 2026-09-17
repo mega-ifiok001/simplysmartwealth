@@ -1,0 +1,7 @@
+/* ticker-style.css
+   The vTicker plugin was used by the original template for the breaking-news
+   ticker; the site does not include one, so this file is stubbed to a
+   minimal valid stylesheet. */
+.ticker {
+  display: none;
+}

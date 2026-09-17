@@ -1,0 +1,43 @@
+/* Overrides & glue CSS for the Next.js migration of the Stories template.
+   Everything the old jQuery plugins did that is expressible in CSS lives here. */
+
+/* Preloader fade-out (was $.fadeOut in main.js) */
+.preloader {
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+.preloader.preloader-hide {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Back-to-top button (was injected by jquery.scrollUp) */
+#scrollUp {
+  position: fixed;
+  z-index: 1000;
+  cursor: pointer;
+}
+
+/* Sticky sidebar (was jquery.theia.sticky) */
+.sticky-sidebar {
+  position: sticky;
+  top: 90px;
+}
+
+/* Mobile menu: plain nested list fallback (was jquery.slicknav) */
+#mobile-menu {
+  padding: 10px 0;
+}
+#mobile-menu a {
+  display: block;
+  padding: 8px 0;
+}
+#mobile-menu ul.sub-menu {
+  padding-left: 20px;
+}
+
+/* Search overlay is toggled via body.open-search-form in the theme CSS;
+   keep the icon clickable above the overlay. */
+header .search-icon {
+  cursor: pointer;
+}
