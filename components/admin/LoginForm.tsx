@@ -13,7 +13,7 @@ export default function AdminLoginForm() {
     setPending(true); setError("");
     const data = new FormData(event.currentTarget);
     try {
-      const result = await signIn("credentials", {
+      const result = await signIn("admin", {
         email: data.get("email"), password: data.get("password"), redirect: false,
       });
       if (result?.ok && !result.error) { router.replace("/admin"); router.refresh(); }

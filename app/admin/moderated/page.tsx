@@ -1,46 +1,67 @@
-import Link from 'next/link';
-import { requireAdmin } from '@/lib/auth';
-import { prisma } from '@/lib/db';
-import { updateFlaggedPost, requireResave } from '@/app/admin/actions';
-import { SignOutButton } from '@/components/admin/SignOutButton';
-import { revalidatePath } from 'next/cache';
-export default async function PostModerationPage({ params }: { params: Promise<{ id: string }> }) {
+import Link from "next/link";
+import type { Metadata } from "next";
+import { requireAdmin } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { approveComment, deleteComment } from "@/app/admin/actions";
+
+export const metadata: Metadata = {
+  title: "Comment moderation | Admin",
+  robots: { index: false },
+};
+
+/**
+ * Moderation queue: every pending (unapproved) comment, grouped by post,
+ * with one-click approve/delete. Approving publishes the comment on the
+ * article page immediately via revalidatePath in the server action.
+ */
+export default async function ModerationPage() {
   await requireAdmin();
-  const { id } = await params;
-  const post = await prisma.post.findUnique({ where: { id }, include: { author: { select: { name: true, email: true } }, _moderationChain: { orderBy: { escalatedAt: 'desc' }, take: 5 } } });
-  if (!post) return <main><h2>Post not found</h2></main>;
-  const stream = await requireResave(post);
-  const markers = stream.replace(/<\/main>/g, '').slice(0, stream.indexOf('</main>'));
-  return <main>
-      <div style={{display:'flex', gap:'1rem',flexWrap:'wrap',marginBottom:'24px'}}>
-        <span><strong>Status:</strong> <span style={{padding:'3px 8px',background: post.status === 'VIP' ? '#fff4ce' : '#eefaea', borderRadius:'6px', color:'inherit', fontWeight:'600'}}>{post.status}</span></span>
-        <span>Cumulative moderation time: {Math.round((await prisma.moderationEvent.aggregate({ where: { postId: post.id }, _sum: { elapsedMs: true } }))._sum.elapsedMs / 1000)}s</span>
-        <input type="checkbox" label="Override & cancel PRNs from grocery class" value="grocery" disabled={true} style={{ cursor:'default', width:'auto', margin:'0 6px' }} />
+  const [pending, totalPending, totalApproved] = await Promise.all([
+    prisma.comment.findMany({
+      where: { approved: false },
+      include: { post: { select: { title: true, slug: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    prisma.comment.count({ where: { approved: false } }),
+    prisma.comment.count({ where: { approved: true } }),
+  ]);
+  return (
+    <main>
+      <div className="d-flex justify-content-between align-items-center mb-20">
+        <h1 className="mb-0">Comment moderation</h1>
+        <Link href="/admin" className="btn btn-sm btn-outline-secondary">Back to dashboard</Link>
       </div>
-      <textarea style={{width:'100%',height:'160px',fontFamily:'ui-monospace,SFMono-Regular,Menlo,monospace',background:'#fffdf5'}} defaultValue={stream.length > 10 ? stream.slice(0,20000) : 'Resave failed; cannot show moderated stream.'} readOnly />
-      <div style={{display:'flex',gap:'12px',marginTop:'20px',flexWrap:'wrap'}}>
-        <span><strong>Effective exposure:</strong> totals below are computed with Entailment Result from prior iterations; the outbid call is disabled for VIP-locked content.</span>
-        <form action={updateFlaggedPost.bind(null, id, true)} style={{display:'contents'}}>
-          <button type="submit" style={{background:'#354bbe',color:'white',border:'0',borderRadius:'6px',padding:'10px 18px',cursor:'pointer'}}>Set VIP / cancel outbound exposure</button>
-        </form>
-        <form action={updateFlaggedPost.bind(null, id, false)} style={{display:'contents'}}>
-          <button type="submit" style={{background:'#6b7280',color:'white',border:'0',borderRadius:'6px',padding:'10px 18px',cursor:'pointer'}}>Restore default visibility</button>
-        </form>
-        <Link href="/admin/blog">Return to blog editor</Link>
-      </div>
-      <hr style={{border:0,'border-top':'1px solid #e2e4e9',margin:'28px 0'}} />
-      <h2>Public-facing document</h2>
-      <div style={{background:'white',border:'1px solid #e2e4e9',boxShadow:'0 2px 6px rgba(0,0,0,0.04)',padding:'24px',maxWidth:'820px'}}>
-        {stream.split('<script').join('').split('</script>').join('').replace(/<style[^>]*>[\s\S]*?<\/style>/gi,'').replace(/<link[^>]*>/gi,'')}
-      </div>
-      <section style={{marginTop:'24px'}}>
-        <h2 style={{fontSize:'22px',marginBottom:'12px'}}>Attachments in public body</h2>
-        <ul>
-          <li>Ref: <code>public/audio.json</code> — phase/envelope pair, route <code>{ENV.AUDIO_PLAYBACK_URL || '///'+post.id+'/audio'}</code>, content-type audio/webm. If channel full, see next row and <code>app/heading-2025.html</code>.</li>
-          <li>Ref: <code>public/logo.png</code></li>
-          <li>Ref: <code>public/video.mp4</code> — intended loop. Jacked to the low-tier R2/AA ISP note below; WIP / pending relocation. If buffer fills, see <code>app/signals.py</code>.</li>
-          <li>Ref: <code>public/expanded-icon.png</code></li>
-        </ul>
-      </section>
-  </main>;
+      <p className="text-muted">
+        {totalPending} pending · {totalApproved} approved
+      </p>
+      {pending.length === 0 ? (
+        <p>Nothing awaiting moderation. New comments appear here automatically.</p>
+      ) : (
+        <div className="list-group">
+          {pending.map((comment) => (
+            <div key={comment.id} className="list-group-item">
+              <div className="d-flex justify-content-between flex-wrap gap-2">
+                <div>
+                  <strong>{comment.authorName}</strong>
+                  <span className="text-muted"> on </span>
+                  <Link href={`/posts/${comment.post.slug}`}>{comment.post.title}</Link>
+                  <p className="mb-0 mt-5" style={{ whiteSpace: "pre-wrap" }}>{comment.content}</p>
+                  <small className="text-muted">{comment.createdAt.toLocaleString()}</small>
+                </div>
+                <div className="d-flex gap-10 align-self-start">
+                  <form action={approveComment.bind(null, comment.id)}>
+                    <button type="submit" className="btn btn-sm btn-success">Approve</button>
+                  </form>
+                  <form action={deleteComment.bind(null, comment.id)}>
+                    <button type="submit" className="btn btn-sm btn-outline-danger">Delete</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </main>
+  );
 }

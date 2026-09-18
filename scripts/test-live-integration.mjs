@@ -104,7 +104,7 @@ try {
   const csrf = await (await request('/api/auth/csrf')).json();
   const body = new URLSearchParams({ csrfToken: csrf.csrfToken, email: process.env.ADMIN_EMAIL,
     password: process.env.ADMIN_PASSWORD, callbackUrl: `${origin}/admin`, json: 'true' });
-  await request('/api/auth/callback/credentials', { method:'POST', body, headers: { 'Content-Type':'application/x-www-form-urlencoded' } });
+  await request('/api/auth/callback/admin', { method:'POST', body, headers: { 'Content-Type':'application/x-www-form-urlencoded' } });
   const session = await (await request('/api/auth/session')).json();
   assert.ok(session.user?.id, 'Configured administrator can sign in');
   assert.equal((await request('/admin')).status,200,'Authenticated dashboard renders');

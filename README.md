@@ -60,7 +60,28 @@ The configured database already has an administrator; do not rerun bootstrap the
 npm run dev
 ```
 
-Open http://localhost:3000/admin/login. From the dashboard you can create and edit posts, schedule works by UTC datetime, attach categories, upload covers, and publish/unpublish. The dashboard shows published, scheduled, and draft counts and the inbox shows resolved/unresolved filters and pagination. After publishing a post, it appears on the homepage when selected and is reachable from the real public article and category pages. Drafts are not served publicly. Article bodies are plain text, not HTML. Replacement and deleted-post images remain in Cloudinary; orphan cleanup is manual for now. A previous run left the configured administrator unable to change its own password; that workflow is not yet available.
+Open http://localhost:3000/admin/login. From the dashboard you can create and edit posts, schedule works by UTC datetime, attach categories, upload covers, and publish/unpublish. The dashboard shows published, scheduled, and draft counts and the inbox shows resolved/unresolved filters and pagination. After publishing a post, it appears on the homepage when selected and is reachable from the real public article and category pages. Drafts are not served publicly. Article bodies are plain text, not HTML. Replacement and deleted-post images remain in Cloudinary; orphan cleanup is manual for now. Administrators cannot change their own password from the UI yet; rotate `ADMIN_PASSWORD` in the environment and redeploy instead.
+
+### Public accounts and newsletter
+
+The public site now has a real reader-account system separate from the admin login:
+
+- `/register` creates a reader account (Prisma model `Reader`), emails a 24-hour double-opt-in verification link, and signs in at `/login` using NextAuth's separate `reader` credentials provider. Unverified accounts cannot sign in.
+- `/auth/verify?token=…` confirms the email and enables sign-in.
+- `/account` (protected) shows the signed-in reader and offers sign-out.
+- The footer newsletter form (`Subscriber` model) is a database-backed double-opt-in flow with a 72-hour confirmation link, `/newsletter/confirm` and `/newsletter/unsubscribe` token pages, and honest neutral responses that cannot be used to probe whether an address is subscribed.
+- Password reset exists at `/forgot-password` and `/auth/reset`; reset links are single-use, 1-hour tokens (`AuthToken` model, bcrypt-hashed at rest). The flow covers reader accounts only; administrators cannot self-reset yet (change `ADMIN_PASSWORD` in the environment and redeploy to rotate an admin password).
+- Contact-form submissions can email the site owner via `CONTACT_NOTIFY_EMAIL`; comment/inbox screens keep working as before.
+
+Reader logins are limited to six attempts per 15 minutes per normalized email; registration, password reset, and newsletter attempts are per-IP limited. Registration, verification, and reset emails are sent through `lib/email.ts`, which uses `nodemailer` with pooled SMTP when `EMAIL_MODE=smtp` and prints messages to the server log in development (`EMAIL_MODE=console`, the default).
+
+### Operations, hardening, and backups
+
+- **Security headers** are applied in `next.config.ts` for every route: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and production-only HSTS.
+- **Trusted-proxy handling**: `lib/request-ip.ts` ignores `x-forwarded-for` unless `TRUST_PROXY=true`, in which case the left-most forwarded entry is used for per-IP rate limiting. Without a trusted proxy, per-IP buckets fall back to a shared global bucket so limits always apply. Set `TRUST_PROXY=true` only when your host's proxy overwrites the header.
+- **Email**: set `EMAIL_MODE=smtp`, `SMTP_HOST/PORT/USER/PASS`, `EMAIL_FROM`, `NEXTAUTH_URL`/`APP_URL` (public base URL used in links), and optionally `CONTACT_NOTIFY_EMAIL`.
+- **Backups**: `node scripts/backup-db.mjs backup [file]` runs `pg_dump` (custom format) against `DIRECT_URL`/`DATABASE_URL`; `node scripts/backup-db.mjs restore <file>` restores with `--clean --if-exists` after a printed warning. Requires the PostgreSQL client tools on PATH and is intended to be scheduled by your host's cron.
+- Rate limits apply on all public forms plus admin/reader login. Deployment-level IP/global request limits at the host/CDN are still recommended before exposing the site to the open internet.
 
 ### Verification
 
@@ -79,15 +100,15 @@ A previous audit reported six advisories; these were resolved by pinning patched
 
 ### Comments/contact deployment notes
 
-Public form throttling currently uses `x-forwarded-for` when present and is skipped when that header is absent. Deploy behind a trusted proxy that overwrites this header and applies IP/global request limits; the application limiter alone is not sufficient spam protection. Moderation defaults to unapproved. Comment moderation and the inbox now use 20-item pages with stable newest-first ordering and total counts. Comments filter by pending/approved; messages filter by all/open/resolved/unread. Invalid page numbers fall back safely. Email notifications, text search, and deletion confirmations are not implemented yet. The primary contact page now uses the saved contact email and no longer includes template business details. Policy text must be reviewed by the site owner; empty policy pages explicitly say the policy has not been published and request no indexing.
+Public form throttling is per-IP when `TRUST_PROXY=true` and per-global-bucket otherwise, all through one shared PostgreSQL-backed limiter (the `SubmissionAttempt` table). Deploy behind a trusted proxy that overwrites `x-forwarded-for` and applies IP/global request limits; the application limiter alone is not sufficient spam protection. Moderation defaults to unapproved. Comment moderation and the inbox use 20-item pages with stable newest-first ordering and total counts. Comments filter by pending/approved; messages filter by all/open/resolved/unread. Invalid page numbers fall back safely. Contact submissions can trigger an owner notification email; comment notifications and text search are not implemented. The primary contact page now uses the saved contact email and no longer includes template business details. Policy text must be reviewed by the site owner; empty policy pages explicitly say the policy has not been published and request no indexing.
 
 The configured database has been reconciled and baselined with `20260917020000_baseline_reconcile`. Existing records were preserved: 1 administrator (formerly User), 16 posts, 5 categories, 16 post/category links, 3 contact messages, 13 settings, and 15 subscribers. The migration is a transformation of that legacy schema, **not an empty-database bootstrap**. Do not run it on a fresh database: a portable baseline/initialization path still needs implementation. Do not reset an existing database or edit the applied migration. Use reviewed incremental migrations for subsequent changes.
 
 ## Scope and remaining work
 
-- Public `/login` and `/register` and newsletter signup remain template UI, not backend integrations. Comments and the contact form are database-backed with moderation and inbox screens in the admin. Admin authentication is separate at `/admin/login`; do not enter admin credentials into the demo forms. Search and category browsing are database-backed.
+- Reader accounts (register, verify, sign in, sign out, password reset) and newsletter double-opt-in are implemented. Not yet available: MFA, additional-admin management, audit history, richer role management, and per-comment email notifications.
 - Many navigation links remain standard anchors. A complete `next/link` conversion and centralized post-data model have not been implemented.
 - Icons on some pages load Ionicons from a third-party CDN.
 - Full browser testing of mobile navigation, overlays, sliders, theme persistence, and visual fidelity remains necessary.
 - Migration generators depend on original HTML or temporary extraction files that are no longer in the working tree. They are historical utilities, not part of the build. Do not rerun `npm run convert` on the current app; edit the TSX source directly. Original files remain available in Git history.
-- Review framework/dependency security updates before public deployment; a successful build is not a dependency security audit.
+- Review framework/dependency security updates before public deployment; a successful build is not a dependency security audit. `npm audit` reported 0 vulnerabilities at the time of the last dependency change.

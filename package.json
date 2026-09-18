@@ -12,6 +12,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:status": "prisma migrate status",
+    "db:backup": "node --env-file=.env scripts/backup-db.mjs backup",
+    "db:restore": "node --env-file=.env scripts/backup-db.mjs restore",
     "admin:create": "node --env-file=.env scripts/create-admin.mjs",
     "admin:password": "node --env-file=.env scripts/set-admin-password.mjs",
     "start": "next start",
@@ -20,10 +22,12 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@types/nodemailer": "^8.0.2",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.11.0",
     "next": "^15.5.25",
     "next-auth": "^4.24.15",
+    "nodemailer": "^7.0.13",
     "react": "^19.1.9",
     "react-dom": "^19.1.9"
   },

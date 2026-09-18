@@ -91,3 +91,72 @@ export function validCredentials(email: string, password: string): boolean {
 export function isPublished(post: { status: string; publishedAt: Date | null }): boolean {
   return post.status === "PUBLISHED" && post.publishedAt !== null && post.publishedAt <= new Date();
 }
+
+export function validateEmailAddress(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    throw new Error("Enter a valid email address.");
+  }
+  return trimmed;
+}
+
+export function validateReaderPassword(value: string): string {
+  if (value.length < 12) throw new Error("Password must contain at least 12 characters.");
+  if (new TextEncoder().encode(value).length > 72) throw new Error("Password is too long.");
+  if (!/\d/.test(value) || !/[A-Z]/.test(value) || !/[a-z]/.test(value)) {
+    throw new Error("Password must include a number, an uppercase letter, and a lowercase letter.");
+  }
+  return value;
+}
+
+export function validateReaderName(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length < 2 || trimmed.length > 60) {
+    throw new Error("Name must contain 2–60 characters.");
+  }
+  return trimmed;
+}
+
+export function validateReaderRegister(data: FormData) {
+  const name = validateReaderName((data.get("name") ?? "").toString());
+  const email = validateEmailAddress((data.get("email") ?? "").toString());
+  const password = validateReaderPassword((data.get("password") ?? "").toString());
+  const passwordConfirm = (data.get("password_confirm") ?? "").toString();
+  if (password !== passwordConfirm) throw new Error("Passwords do not match.");
+  return { name, email, password };
+}
+
+export function validateReaderSignIn(data: FormData) {
+  const email = validateEmailAddress((data.get("email") ?? "").toString());
+  const password = (data.get("password") ?? "").toString();
+  if (!password) throw new Error("Password is required.");
+  return { email, password };
+}
+
+/** String-based variant used by the NextAuth "reader" credentials provider. */
+export function validateReaderCredentials(
+  email: unknown,
+  password: unknown,
+): { email: string; password: string } {
+  if (typeof email !== "string" || typeof password !== "string") {
+    throw new Error("Email and password are required.");
+  }
+  return {
+    email: validateEmailAddress(email),
+    password,
+  };
+}
+
+export function validatePasswordResetRequest(data: FormData) {
+  return { email: validateEmailAddress((data.get("email") ?? "").toString()) };
+}
+
+export function validatePasswordReset(data: FormData) {
+  const email = validateEmailAddress((data.get("email") ?? "").toString());
+  const password = validateReaderPassword((data.get("password") ?? "").toString());
+  const passwordConfirm = (data.get("password_confirm") ?? "").toString();
+  const token = (data.get("token") ?? "").toString().trim();
+  if (!token) throw new Error("Confirmation token is required.");
+  if (password !== passwordConfirm) throw new Error("Passwords do not match.");
+  return { email, password, token };
+}

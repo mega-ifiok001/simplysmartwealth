@@ -19,6 +19,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     <nav><Link href="/admin/posts/new">Create post</Link><Link href="/admin/categories">Categories</Link>
       <Link href="/admin/comments">Comments{pendingComments ? ` (${pendingComments})` : ""}</Link>
       <Link href="/admin/inbox">Inbox{openMessages ? ` (${openMessages})` : ""}</Link>
+      <Link href="/admin/newsletter">Newsletter</Link>
       <Link href="/admin/settings">Site settings</Link><Link href="/">View website</Link><SignOutButton /></nav>
     <p>{total} posts · {published} published · {scheduled} scheduled · {total - published - scheduled} drafts</p>
     <div className="table-wrap"><table><thead><tr><th>Title</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
