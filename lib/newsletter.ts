@@ -21,8 +21,18 @@ export async function subscribeNewsletter(
   _prev: { ok: boolean; error: string; message: string },
   data: FormData,
 ): Promise<{ ok: boolean; error: string; message: string }> {
+  // Validation errors are user-facing and safe to show verbatim.
+  let email: string;
   try {
-    const email = validateEmailAddress((data.get("email") ?? "").toString());
+    email = validateEmailAddress((data.get("email") ?? "").toString());
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Please enter a valid email address.",
+      message: "",
+    };
+  }
+  try {
     const consent = data.get("consent") === "on";
     if (!consent) {
       return { ok: false, error: "Please accept the terms to subscribe.", message: "" };
@@ -54,9 +64,12 @@ export async function subscribeNewsletter(
     });
     return { ok: true, error: "", message: "Almost done — check your email to confirm your subscription." };
   } catch (error) {
+    // Infrastructure failures (database, SMTP) must not leak configuration
+    // details to visitors; they are logged for operators instead.
+    console.error("[newsletter] subscribe failed:", error instanceof Error ? error.message : error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Could not subscribe right now. Please try again later.",
+      error: "Could not subscribe right now. Please try again later.",
       message: "",
     };
   }

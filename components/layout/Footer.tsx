@@ -28,12 +28,12 @@ export default function Footer({
           </div>
           <div className="col-lg-3 col-md-6">
             <div className="sidebar-widget widget_tagcloud wow fadeInUp animated mb-30" data-wow-delay="0.2s">
-              <div className="widget-header-2 position-relative mb-30"><h5 className="mt-5 mb-30">Categories</h5></div>
+              <div className="widget-header-2 position-relative mb-30"><h5 className="mt-5 mb-30">Topics</h5></div>
               <div className="tagcloud mt-50">
-                <a className="tag-cloud-link" href="/category">Investing</a>
-                <a className="tag-cloud-link" href="/category">Saving</a>
-                <a className="tag-cloud-link" href="/category">Budgeting</a>
-                <a className="tag-cloud-link" href="/category">Retirement</a>
+                <a className="tag-cloud-link" href="/category/budgeting">Budgeting</a>
+                <a className="tag-cloud-link" href="/category/saving">Saving</a>
+                <a className="tag-cloud-link" href="/category/side-hustles">Side Hustles</a>
+                <a className="tag-cloud-link" href="/category/investing">Investing</a>
               </div>
             </div>
           </div>
