@@ -10,6 +10,12 @@ const manifest = JSON.parse(fs.readFileSync(path.join(build, "prerender-manifest
 const routeManifest = JSON.parse(fs.readFileSync(path.join(build, "routes-manifest.json"), "utf8"));
 // Exact routes may now be rendered on demand (for example the homepage).
 const routes = new Set([...Object.keys(manifest.routes), ...routeManifest.staticRoutes.map(route => route.page)]);
+// Dynamic routes (/posts/[slug], /category/[slug], ...) are rendered on demand
+// and never appear in the prerender manifest, but links to them are still
+// valid. Match candidate links against the manifest's own dynamic regexes.
+const dynamicMatchers = (routeManifest.dynamicRoutes ?? [])
+  .map(entry => { try { return new RegExp(entry.regex); } catch { return null; } })
+  .filter(Boolean);
 const failures = [];
 let pages = 0;
 let references = 0;
@@ -41,6 +47,7 @@ for (const file of walk(app).filter(file => file.endsWith(".html"))) {
       // The template's explicit 404 demo intentionally invokes Next's not-found page.
       if (normalized === "/404" && fs.existsSync(path.join(app, "_not-found.html"))) continue;
       if (routes.has(normalized)) continue;
+      if (dynamicMatchers.some(matcher => matcher.test(pathname))) continue;
       const asset = pathname.startsWith("/_next/")
         ? path.join(build, pathname.slice("/_next/".length))
         : path.join(root, "public", pathname);
