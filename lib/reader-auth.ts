@@ -20,6 +20,20 @@ function emailKey(email: string): string {
 }
 
 /**
+ * Sends and never throws: a mail outage must not break account flows or
+ * leak delivery state to the client. Failures are logged for operators.
+ */
+async function trySendEmail(params: Parameters<typeof sendEmail>[0]): Promise<boolean> {
+  try {
+    await sendEmail(params);
+    return true;
+  } catch (error) {
+    console.error("[email] delivery failed:", error instanceof Error ? error.message : error);
+    return false;
+  }
+}
+
+/**
  * Reader account actions. Registration and password recovery always respond
  * with a neutral success message so the forms cannot be used to enumerate
  * which email addresses have accounts.
@@ -45,12 +59,19 @@ export async function registerReader(data: FormData) {
       });
   const token = await issueToken(reader.email, "VERIFY_EMAIL");
   const link = `${baseUrl()}/auth/verify?token=${encodeURIComponent(token)}`;
-  await sendEmail({
+  const delivered = await trySendEmail({
     to: reader.email,
     subject: "Confirm your account on Simply Smart Wealth",
     text: `Hi ${input.name ?? "there"},\n\nPlease confirm your email address by visiting:\n${link}\n\nThis link expires in 24 hours. If you did not create an account, you can ignore this message.\n\nThanks,\nSimply Smart Wealth`,
     html: `<p>Hi ${input.name ?? "there"},</p><p>Please confirm your email address by clicking the link below:</p><p><a href="${link}">Confirm email address</a></p><p>This link expires in 24 hours. If you did not create an account, you can ignore this message.</p><p>Thanks,<br>Simply Smart Wealth</p>`,
   });
+  if (!delivered) {
+    // The account row exists; re-registering updates it and re-issues a token.
+    return {
+      ok: false,
+      error: "We could not send the confirmation email right now. Please try again in a few minutes.",
+    };
+  }
   return { ok: true, message: "Check your email to confirm your account." };
 }
 
@@ -63,7 +84,7 @@ export async function requestPasswordReset(data: FormData) {
   if (reader?.emailVerified) {
     const token = await issueToken(reader.email, "PASSWORD_RESET");
     const link = `${baseUrl()}/auth/reset?token=${encodeURIComponent(token)}`;
-    await sendEmail({
+    await trySendEmail({
       to: reader.email,
       subject: "Reset your password on Simply Smart Wealth",
       text: `Hi ${reader.name ?? "there"},\n\nYou requested a password reset. Use this link:\n${link}\n\nThis link expires in 24 hours. If you did not request this, you can ignore this message.\n\nThanks,\nSimply Smart Wealth`,
