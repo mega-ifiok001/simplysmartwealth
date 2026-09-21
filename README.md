@@ -21,9 +21,47 @@ npm run verify
 npm start
 ```
 
-Development output uses `.next`; production output uses `.next-production`, allowing a build while the development server is running. `npm start` serves the production build on port 3000 by default.
+Development output uses `.next`; local production output uses `.next-production`, allowing a build while the development server is running. `npm start` serves the production build on port 3000 by default. On Vercel the build always targets `.next` (see "Deploying to Vercel" below), because Vercel's Next.js builder collects that directory; `NEXT_DIST_DIR` overrides the directory everywhere.
 
 The verification script checks `href` and `src` references in every generated App Router HTML page against prerendered routes and local files. The explicit `/404` demonstration link is expected to display the not-found page. External URLs and fragment-only links are skipped. This is not a browser, accessibility, image-decoding, CSS-resource, or backend test.
+
+## Deploying to Vercel
+
+Vercel runs `npm install` then `npm run build`. `postinstall` generates the Prisma client, and `build` runs `prisma generate && next build`. No `vercel.json` is required.
+
+### Required environment variables
+
+Set these under Project → Settings → Environment Variables (Production, and Preview if you build previews):
+
+| Variable | Value | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | Neon **pooled** connection string | Used at runtime. |
+| `DIRECT_URL` | Neon **direct** (non-pooled) URL | Used by migrations and `db:backup`. |
+| `NEXTAUTH_SECRET` | `openssl rand -base64 32` | Required. Never prefix with `NEXT_PUBLIC_`. |
+| `NEXTAUTH_URL` | `https://your-real-domain.com` | **Must be a full `http(s)://` URL. Never leave this variable set to an empty string** — an empty value makes `next-auth/react` throw `TypeError: Invalid URL` (`ERR_INVALID_URL`) while the build prerenders any page that imports the auth client. |
+| `APP_URL` | Same as `NEXTAUTH_URL` | Used in verification, reset, and newsletter links. |
+| `TRUST_PROXY` | `true` | Correct on Vercel: its edge overwrites `x-forwarded-for`, so per-IP rate limits work instead of collapsing into one shared bucket. |
+| `EMAIL_MODE` | `smtp` | `console` only logs messages to the build/runtime log. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | your mail provider | Required for verification, password reset, and newsletter mail. |
+| `EMAIL_FROM` | `Simply Smart Wealth <noreply@your-domain.com>` | Must be a domain you are allowed to send from. |
+| `CONTACT_NOTIFY_EMAIL` | your inbox | Optional; enables contact-form notifications. |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Cloudinary dashboard | Optional; only needed to upload cover images. |
+
+`NEXTAUTH_URL` is normalized at build time by `next.config.ts` (blank or malformed values are unset so NextAuth can fall back instead of crashing), but set it correctly anyway — it is what NextAuth uses for callback and redirect URLs at runtime.
+
+### First deployment
+
+```bash
+npm run db:migrate   # prisma migrate deploy, run against production once
+npm run admin:create # creates the first admin; refuses if one already exists
+```
+
+### After deployment
+
+- Confirm the Vercel build log contains no `Export encountered an error on /login/page`.
+- Sign in at `/admin/login`, and confirm `/login`, `/register`, and `/account` render.
+- Run `npm run verify` locally after a production build to re-check generated links.
+- `NEXTAUTH_URL` blank, unset-but-required, or missing its scheme is the most common cause of auth redirect loops after a successful deploy.
 
 ## Source locations
 
@@ -32,7 +70,7 @@ The verification script checks `href` and `src` references in every generated Ap
 - `C:\Users\LENOVO\Documents\simplysmartwealth\public\assets`: theme styles, images, fonts, and retained legacy assets. Legacy template JavaScript is not imported by the application.
 - `C:\Users\LENOVO\Documents\simplysmartwealth\scripts`: migration utilities and verification scripts.
 
-Routes include `/`, `/home-2`, `/home-3`, category and article layout variants, `/about`, `/author`, `/contact`, `/login`, `/register`, `/search`, and `/typography`.
+Routes include the real blog surface: `/`, `/category`, `/category/[slug]`, `/posts/[slug]`, `/about`, `/contact`, `/privacy`, `/terms`, `/search`, `/login`, `/register`, `/forgot-password`, `/auth/reset`, `/auth/verify`, `/newsletter/confirm`, `/newsletter/unsubscribe`, `/account`, and `/admin/*`. The original template demo URLs (`/home-2`, `/home-3`, `/single*`, `/category-list`, `/category-grid`, `/category-masonry`, `/category-big`, `/categories/*`, `/author`, `/typography`) no longer exist as pages and 301-redirect to their real equivalents.
 
 ## Publishing backend setup (first milestone)
 
@@ -94,7 +132,7 @@ npm run verify
 
 Unit tests cover validation, settings, pagination, publication rules, and revision scheduling. The credential-free smoke test runs on port 3198. After a production build, `npm run test:live` connects to the configured database and admin credentials on port 3197 and verifies settings-backed pages, a featured/post listing homepage, post create → schedule → revision snapshot → publish → unpublish, real admin login and protected dashboard, authenticated inbox/comment filters and pagination, contact submission through the rendered server action with database persistence and inbox visibility, and a migrated public article. It deletes only its uniquely marked test contact and does not yet test Cloudinary uploads, browser interactions, or manual upload-side verification. The publishing test method is deliberately black-box and form-driven; its result is stored in the logs, but it is not a deterministic guarantee against future change.
 
-Authentication uses an eight-hour JWT session plus an active-admin database check for every protected page/action. Logins are limited to five attempts per 15 minutes per normalized email, comments to five per 10 minutes per client IP, and contact messages to three per hour per client IP — all through one shared PostgreSQL-backed limiter (the `SubmissionAttempt` table). Add deployment-level IP/global rate limits and periodically remove expired `SubmissionAttempt` records before public deployment. Account recovery, MFA, additional-admin management, audit history, and richer role management are not included yet.
+Authentication uses an eight-hour JWT session plus an active-admin database check for every protected page/action. One NextAuth configuration serves two separate credentials providers: `admin` (admin area) and `reader` (public accounts), and the session carries the role so the two can never be confused. Logins are limited per email (5 per 15 minutes for admin, 6 per 15 minutes for readers), comments to five per 10 minutes per client IP, and contact messages to three per hour per client IP — all through one shared PostgreSQL-backed limiter (the `SubmissionAttempt` table). Account recovery for readers (verify email, forgot password, reset password) is implemented; MFA, additional-admin management, audit history, and richer role management are not included yet. Add deployment-level IP/global rate limits and periodically remove expired `SubmissionAttempt` records before public deployment.
 
 A previous audit reported six advisories; these were resolved by pinning patched transitive versions via npm `overrides` (postcss ^8.5.28, sharp ^0.35.4, deepmerge-ts ^8.0.2). `npm audit` now reports 0 vulnerabilities. Re-run `npm audit` after future dependency changes.
 

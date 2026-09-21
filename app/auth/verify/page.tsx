@@ -5,6 +5,9 @@ import Footer from "@/components/layout/Footer";
 import SiteBottom from "@/components/layout/SiteBottom";
 import { verifyEmail } from "@/lib/reader-auth";
 
+// A one-time verification token is consumed on load; never cache this.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Simply Smart Wealth - Confirm your email",
   robots: { index: false },

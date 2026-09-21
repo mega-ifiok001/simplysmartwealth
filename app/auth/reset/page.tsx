@@ -4,6 +4,9 @@ import Footer from "@/components/layout/Footer";
 import SiteBottom from "@/components/layout/SiteBottom";
 import ResetPasswordForm from "@/components/site/ResetPasswordForm";
 
+// A one-time reset token is read from the query string; never cache this.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Simply Smart Wealth - Set a new password",
   robots: { index: false },

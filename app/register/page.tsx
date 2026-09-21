@@ -4,6 +4,8 @@ import Footer from "@/components/layout/Footer";
 import SiteBottom from "@/components/layout/SiteBottom";
 import ReaderRegisterForm from "@/components/site/ReaderRegisterForm";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Simply Smart Wealth - Register",
 };

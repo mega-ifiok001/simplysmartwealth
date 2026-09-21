@@ -5,6 +5,9 @@ import Footer from "@/components/layout/Footer";
 import SiteBottom from "@/components/layout/SiteBottom";
 import { confirmNewsletter } from "@/lib/newsletter";
 
+// A one-time confirmation token is consumed on load; never cache this.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Simply Smart Wealth - Newsletter confirmed",
   robots: { index: false },

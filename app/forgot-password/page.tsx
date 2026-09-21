@@ -4,6 +4,8 @@ import Footer from "@/components/layout/Footer";
 import SiteBottom from "@/components/layout/SiteBottom";
 import ForgotPasswordForm from "@/components/site/ForgotPasswordForm";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Simply Smart Wealth - Reset your password",
   robots: { index: false },

@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 import { load } from "cheerio";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const build = path.join(root, ".next-production");
+// Mirrors resolveDistDir() in next.config.ts: Vercel always builds to ".next",
+// local production builds use ".next-production", NEXT_DIST_DIR overrides both.
+const distDir =
+  process.env.NEXT_DIST_DIR || (process.env.VERCEL ? ".next" : ".next-production");
+const build = path.join(root, distDir);
 const app = path.join(build, "server", "app");
 const manifest = JSON.parse(fs.readFileSync(path.join(build, "prerender-manifest.json"), "utf8"));
 const routeManifest = JSON.parse(fs.readFileSync(path.join(build, "routes-manifest.json"), "utf8"));

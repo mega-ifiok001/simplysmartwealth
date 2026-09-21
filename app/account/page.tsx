@@ -6,6 +6,8 @@ import SiteBottom from "@/components/layout/SiteBottom";
 import { getReader } from "@/lib/auth";
 import SignOutButton from "@/components/site/SignOutButton";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Simply Smart Wealth - Your account",
   robots: { index: false },

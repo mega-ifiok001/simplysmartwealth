@@ -4,6 +4,10 @@ import Footer from "@/components/layout/Footer";
 import SiteBottom from "@/components/layout/SiteBottom";
 import ReaderLoginForm from "@/components/site/ReaderLoginForm";
 
+// Rendered on demand. The form imports next-auth/react, whose module scope
+// parses NEXTAUTH_URL; prerendering would run that parse at build time.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Simply Smart Wealth - Login",
 };
