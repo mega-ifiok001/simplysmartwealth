@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { overLimit } from "@/lib/rate-limit";
-import { validateComment, validateContact } from "@/lib/validation";
+import { isEntityId, validateComment, validateContact } from "@/lib/validation";
 import { getClientIp, UNKNOWN_IP_BUCKET } from "@/lib/request-ip";
 import { sendEmail } from "@/lib/email";
 
@@ -20,15 +20,30 @@ async function clientIp(): Promise<string> {
   return getClientIp(hdrs, { trustProxy: process.env.TRUST_PROXY === "true" }) ?? UNKNOWN_IP_BUCKET;
 }
 
-export async function submitComment(postId: string, _prev: PublicFormState, data: FormData): Promise<PublicFormState> {
+/**
+ * Posts a comment or a reply. Comments publish immediately; an admin can
+ * still unapprove or delete them afterwards.
+ */
+export async function submitComment(
+  postId: string,
+  parentId: string | null,
+  _prev: PublicFormState,
+  data: FormData,
+): Promise<PublicFormState> {
   let input: ReturnType<typeof validateComment>;
   try { input = validateComment(data); }
   catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Invalid comment." };
   }
   try {
+    // Honeypot: hidden from people, filled by bots. Report success so the bot
+    // learns nothing, but never store it.
+    if ((data.get("website") ?? "").toString().trim() !== "") {
+      return { ok: true, error: "" };
+    }
     const ip = await clientIp();
-    // Comments are moderated, so the limiter is a flood guard, not the only defense.
+    // Flood guard only; auto-published comments rely on this plus the honeypot
+    // and admin unapprove/delete.
     if (await overLimit(`comment:${ip}`, 5, 10 * 60 * 1000)) {
       return { ok: false, error: "Too many submissions from your network. Please try again later." };
     }
@@ -37,7 +52,30 @@ export async function submitComment(postId: string, _prev: PublicFormState, data
       select: { id: true, slug: true },
     });
     if (!post) return { ok: false, error: "Comments are only open on published articles." };
-    await prisma.comment.create({ data: { postId: post.id, authorName: input.authorName, content: input.content } });
+
+    // Resolve the thread root. A reply's parent must belong to this post, and
+    // a reply to a reply is flattened onto the same top-level comment so
+    // threads stay exactly one level deep.
+    let threadRootId: string | null = null;
+    if (parentId) {
+      if (!isEntityId(parentId)) return { ok: false, error: "That comment is no longer available." };
+      const parent = await prisma.comment.findFirst({
+        where: { id: parentId, postId: post.id },
+        select: { id: true, parentId: true },
+      });
+      if (!parent) return { ok: false, error: "That comment is no longer available." };
+      threadRootId = parent.parentId ?? parent.id;
+    }
+
+    await prisma.comment.create({
+      data: {
+        postId: post.id,
+        parentId: threadRootId,
+        authorName: input.authorName,
+        content: input.content,
+        approved: true,
+      },
+    });
     revalidatePath(`/posts/${post.slug}`);
     return { ok: true, error: "" };
   } catch {

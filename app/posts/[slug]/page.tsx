@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { getSiteSettings } from "@/lib/settings";
 import PublicPage from "@/components/PublicPage";
 import CommentForm from "@/components/CommentForm";
+import CommentThread from "@/components/CommentThread";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,22 @@ const getPost = cache(async (slug: string) => {
       author: { select: { name: true } },
       categories: { select: { category: { select: { id: true, name: true, slug: true } } } },
       comments: {
-        where: { approved: true },
+        // Top-level comments newest first; replies oldest-first under each.
+        where: { approved: true, parentId: null },
         orderBy: { createdAt: "desc" },
         take: 50,
-        select: { id: true, authorName: true, content: true, createdAt: true },
+        select: {
+          id: true,
+          authorName: true,
+          content: true,
+          createdAt: true,
+          replies: {
+            where: { approved: true },
+            orderBy: { createdAt: "asc" },
+            take: 50,
+            select: { id: true, authorName: true, content: true, createdAt: true },
+          },
+        },
       },
     },
   });
@@ -48,6 +61,7 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
   const shareUrl = encodeURIComponent(`${base}/posts/${post.slug}`);
   const shareTitle = encodeURIComponent(post.title);
   const minutes = Math.max(1, Math.round(post.content.split(/\s+/).filter(Boolean).length / 200));
+  const commentCount = post.comments.reduce((total, comment) => total + 1 + comment.replies.length, 0);
   const initial = (post.author.name ?? "A").trim().charAt(0).toUpperCase() || "A";
   const related = post.categories.length
     ? await prisma.post.findMany({
@@ -133,19 +147,27 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
 
               <section className="mb-50" aria-label="Comments">
                 <div className="widget-header-2 position-relative mb-30">
-                  <h5 className="mt-5 mb-30">Comments ({post.comments.length})</h5>
+                  <h5 className="mt-5 mb-30">Comments ({commentCount})</h5>
                 </div>
                 {!post.comments.length && <p className="text-muted font-small">No comments yet. Start the conversation.</p>}
                 {post.comments.map((comment) => (
-                  <div key={comment.id} className="bg-white has-border p-25 border-radius-5 mb-20">
-                    <p className="mb-10">
-                      <strong>{comment.authorName}</strong>{" "}
-                      <span className="ml-10 font-x-small text-muted">{formatDate(comment.createdAt)}</span>
-                    </p>
-                    <p className="font-small mb-0" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-                      {comment.content}
-                    </p>
-                  </div>
+                  <CommentThread
+                    key={comment.id}
+                    postId={post.id}
+                    comment={{
+                      id: comment.id,
+                      authorName: comment.authorName,
+                      content: comment.content,
+                      createdAt: formatDate(comment.createdAt),
+                      replies: comment.replies.map((reply) => ({
+                        id: reply.id,
+                        authorName: reply.authorName,
+                        content: reply.content,
+                        createdAt: formatDate(reply.createdAt),
+                        replies: [],
+                      })),
+                    }}
+                  />
                 ))}
                 <CommentForm postId={post.id} />
               </section>

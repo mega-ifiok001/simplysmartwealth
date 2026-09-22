@@ -30,6 +30,8 @@ function openSidebar() {
   document.body.classList.add("canvas-opened");
 }
 
+// Readers do not have accounts, so the header offers no sign-in/register
+// controls; the admin signs in at /admin/login.
 export default function Header({ siteName = "Simply Smart Wealth" }: { siteName?: string }) {
   const { scrolled } = useUI();
   const [firstWord, ...rest] = siteName.split(" ");
@@ -45,18 +47,12 @@ export default function Header({ siteName = "Simply Smart Wealth" }: { siteName?
 					</Link>
 				</div>
 				<div className="col-md-9 col-xs-6 text-end header-top-right">
-					<ul className="list-inline nav-topbar d-none d-md-inline">
-						<li className="list-inline-item"><Link href="/login"><i className="elegant-icon icon_profile mr-5"></i>Sign in</Link></li>
-						<li className="list-inline-item"><Link href="/register"><i className="elegant-icon icon_plus mr-5"></i>Register</Link></li>
-					</ul>
-					<span className="vertical-divider mr-20 ml-20 d-none d-md-inline"></span>
 					<button className="search-icon d-none d-md-inline" onClick={toggleSearch} aria-label="Search">
 						<span className="mr-15 text-muted font-small"><i className="elegant-icon icon_search mr-5"></i>Search</span>
 					</button>
 					<div className="dark-light-mode-cover">
 						<a className="dark-light-mode" href="#" onClick={toggleTheme} aria-label="Toggle dark mode"></a>
 					</div>
-					<Link className="btn btn-radius bg-primary text-white ml-15 font-small box-shadow" href="/account">Your account</Link>
 				</div>
 			</div>
 		</div>

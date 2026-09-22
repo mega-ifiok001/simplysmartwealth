@@ -33,16 +33,6 @@ export default function OffcanvasSidebar() {
 				</ul>
 			</div>
 		</div>
-		<div className="sidebar-widget mb-50">
-			<div className="widget-header-2 position-relative mb-30"><h5 className="mt-5 mb-30">Your account</h5></div>
-			<div className="widget_nav_menu">
-				<ul>
-					<li className="cat-item"><Link href="/login">Sign in</Link></li>
-					<li className="cat-item"><Link href="/register">Register</Link></li>
-					<li className="cat-item"><Link href="/account">Your account</Link></li>
-				</ul>
-			</div>
-		</div>
 	</div>
 </aside>
   );

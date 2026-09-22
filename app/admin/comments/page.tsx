@@ -3,39 +3,88 @@ import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { pageNumber } from "@/lib/pagination";
 import { approveComment, unapproveComment, deleteComment } from "@/app/admin/actions";
+
 export const dynamic = "force-dynamic";
+
+/**
+ * Comments publish immediately, so this screen is a review/cleanup tool
+ * rather than an approval queue: it lists everything by default, and an admin
+ * can unapprove (hide) or delete anything that should not be public.
+ */
 export default async function AdminCommentsPage({ searchParams }: { searchParams: Promise<{ page?: string; status?: string }> }) {
   await requireAdmin();
   const params = await searchParams;
-  const status = params.status === "approved" ? "approved" : "pending";
-  const where = { approved: status === "approved" };
+  const status = params.status === "approved" ? "approved" : params.status === "pending" ? "pending" : "all";
+  const where = status === "all" ? {} : { approved: status === "approved" };
   const total = await prisma.comment.count({ where });
   const pages = Math.max(1, Math.ceil(total / 20));
   const page = Math.min(pageNumber(params.page), pages);
-  const comments = await prisma.comment.findMany({ where,
-    orderBy: [{ createdAt: "desc" }, { id: "asc" }], skip: (page - 1) * 20, take: 20,
-    include: { post: { select: { title: true, slug: true } } },
+  const comments = await prisma.comment.findMany({
+    where,
+    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+    skip: (page - 1) * 20,
+    take: 20,
+    include: { post: { select: { title: true, slug: true } }, parent: { select: { authorName: true } } },
   });
-  return <main>
-    <nav><Link href="/admin">Back to dashboard</Link><Link href="/admin/inbox">Contact inbox</Link></nav>
-    <h1>Comment moderation</h1>
-    <form action="/admin/comments" method="get">
-      <label>Status<select name="status" defaultValue={status}><option value="pending">Pending</option><option value="approved">Approved</option></select></label>
-      <button type="submit">Filter comments</button>
-    </form>
-    <h2 className="mt-30">{status === "approved" ? "Approved" : "Pending"} ({total})</h2>
-    {comments.length ? comments.map(comment => <article key={comment.id} className="mb-20">
-      <p><strong>{comment.authorName}</strong> on <Link href={`/posts/${comment.post.slug}`}>{comment.post.title}</Link>
-        <span className="text-muted"> · {comment.createdAt.toISOString().slice(0, 10)}</span></p>
-      <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{comment.content}</p>
-      <form action={(comment.approved ? unapproveComment : approveComment).bind(null, comment.id)} className="inline">
-        <button type="submit">{comment.approved ? "Unapprove" : "Approve"}</button></form>{" "}
-      <form action={deleteComment.bind(null, comment.id)} className="inline"><button type="submit">Delete</button></form>
-    </article>) : <p>No matching comments.</p>}
-    <nav aria-label="Comment pages">
-      {page > 1 && <Link href={`/admin/comments?status=${status}&page=${page - 1}`}>Previous</Link>}
-      <span>Page {page} of {pages}</span>
-      {page < pages && <Link href={`/admin/comments?status=${status}&page=${page + 1}`}>Next</Link>}
-    </nav>
-  </main>;
+  const heading = status === "all" ? "All comments" : status === "approved" ? "Approved" : "Hidden";
+  return (
+    <>
+      <h1 className="admin-page-title">Comments</h1>
+      <p className="admin-page-sub">Comments appear on articles as soon as they are posted. Unapprove to hide one, or delete it permanently.</p>
+      <div className="admin-card">
+        <div className="admin-card-header">
+          <h2 className="admin-card-title">{heading} ({total})</h2>
+          <div className="admin-actions">
+            <Link href="/admin" className="admin-back">Back to dashboard</Link>
+            <Link href="/admin/inbox" className="admin-btn">Contact inbox</Link>
+          </div>
+        </div>
+        <div className="admin-card-body">
+          <form action="/admin/comments" method="get" className="admin-field" style={{ marginBottom: 18 }}>
+            <label className="admin-field-label">Status</label>
+            <select name="status" defaultValue={status} className="admin-field-select">
+              <option value="all">All</option>
+              <option value="approved">Approved (visible)</option>
+              <option value="pending">Hidden</option>
+            </select>
+            <button type="submit" className="admin-btn admin-btn-primary">Filter comments</button>
+          </form>
+          {comments.length ? (
+            comments.map((comment) => (
+              <article key={comment.id} className="admin-comment">
+                <div className="admin-comment-meta">
+                  <strong>{comment.authorName}</strong>
+                  <span className="admin-meta"> on </span>
+                  <Link href={`/posts/${comment.post.slug}`} className="admin-link">{comment.post.title}</Link>
+                  <span className="admin-meta"> · {comment.createdAt.toISOString().slice(0, 10)}</span>
+                  {comment.parent && (
+                    <>
+                      <span className="admin-meta"> · reply to {comment.parent.authorName}</span>
+                    </>
+                  )}
+                  {!comment.approved && <span className="badge badge-spam">hidden</span>}
+                </div>
+                <p className="admin-comment-content" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{comment.content}</p>
+                <div className="admin-comment-actions">
+                  <form action={(comment.approved ? unapproveComment : approveComment).bind(null, comment.id)} className="inline">
+                    <button type="submit" className="admin-btn">{comment.approved ? "Unapprove" : "Approve"}</button>
+                  </form>
+                  <form action={deleteComment.bind(null, comment.id)} className="inline">
+                    <button type="submit" className="admin-btn admin-btn-danger">Delete</button>
+                  </form>
+                </div>
+              </article>
+            ))
+          ) : (
+            <p className="admin-empty"><span className="admin-empty-icon">💬</span>No matching comments.</p>
+          )}
+        </div>
+      </div>
+      <nav className="admin-pagination" aria-label="Comment pages">
+        {page > 1 && <Link href={`/admin/comments?status=${status}&page=${page - 1}`} className="admin-btn">Previous</Link>}
+        <span>Page {page} of {pages}</span>
+        {page < pages && <Link href={`/admin/comments?status=${status}&page=${page + 1}`} className="admin-btn">Next</Link>}
+      </nav>
+    </>
+  );
 }

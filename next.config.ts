@@ -73,6 +73,13 @@ export default function nextConfig(phase: string): NextConfig {
         { source: "/category-big", destination: "/category", permanent: true },
         { source: "/categories", destination: "/category", permanent: true },
         { source: "/categories/:slug", destination: "/category/:slug", permanent: true },
+        // Reader accounts were removed; the admin signs in at /admin/login.
+        { source: "/login", destination: "/admin/login", permanent: true },
+        { source: "/account", destination: "/admin/login", permanent: true },
+        { source: "/register", destination: "/", permanent: true },
+        { source: "/forgot-password", destination: "/", permanent: true },
+        { source: "/auth/verify", destination: "/", permanent: true },
+        { source: "/auth/reset", destination: "/", permanent: true },
       ];
     },
     async headers() {
