@@ -41,9 +41,9 @@ Set these under Project → Settings → Environment Variables (Production, and 
 | `NEXTAUTH_URL` | `https://your-real-domain.com` | **Must be a full `http(s)://` URL. Never leave this variable set to an empty string** — an empty value makes `next-auth/react` throw `TypeError: Invalid URL` (`ERR_INVALID_URL`) while the build prerenders any page that imports the auth client. |
 | `APP_URL` | Same as `NEXTAUTH_URL` | Used in verification, reset, and newsletter links. |
 | `TRUST_PROXY` | `true` | Correct on Vercel: its edge overwrites `x-forwarded-for`, so per-IP rate limits work instead of collapsing into one shared bucket. |
-| `EMAIL_MODE` | `smtp` | `console` only logs messages to the build/runtime log. |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | your mail provider | Required for verification, password reset, and newsletter mail. |
-| `EMAIL_FROM` | `Simply Smart Wealth <noreply@your-domain.com>` | Must be a domain you are allowed to send from. |
+| `EMAIL_MODE` | `resend` | `console` only logs messages to the build/runtime log. |
+| `RESEND_API_KEY` | `re_...` from resend.com | Required for newsletter, contact-notification, and any transactional mail. |
+| `EMAIL_FROM` | `Simply Smart Wealth <noreply@your-domain.com>` | Must be a domain verified in Resend, otherwise sends are rejected. |
 | `CONTACT_NOTIFY_EMAIL` | your inbox | Optional; enables contact-form notifications. |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Cloudinary dashboard | Optional; only needed to upload cover images. |
 
@@ -112,13 +112,13 @@ The public site now has a real reader-account system separate from the admin log
 - Password reset exists at `/forgot-password` and `/auth/reset`; reset links are single-use, 1-hour tokens (`AuthToken` model, bcrypt-hashed at rest). The flow covers reader accounts only; administrators cannot self-reset yet (change `ADMIN_PASSWORD` in the environment and redeploy to rotate an admin password).
 - Contact-form submissions can email the site owner via `CONTACT_NOTIFY_EMAIL`; comment/inbox screens keep working as before.
 
-Reader logins are limited to six attempts per 15 minutes per normalized email; registration, password reset, and newsletter attempts are per-IP limited. Registration, verification, and reset emails are sent through `lib/email.ts`, which uses `nodemailer` with pooled SMTP when `EMAIL_MODE=smtp` and prints messages to the server log in development (`EMAIL_MODE=console`, the default).
+Reader logins are limited to six attempts per 15 minutes per normalized email; registration, password reset, and newsletter attempts are per-IP limited. Registration, verification, and reset emails are sent through `lib/email.ts`, which uses the Resend HTTP API when `EMAIL_MODE=resend` and prints messages to the server log in development (`EMAIL_MODE=console`, the default).
 
 ### Operations, hardening, and backups
 
 - **Security headers** are applied in `next.config.ts` for every route: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and production-only HSTS.
 - **Trusted-proxy handling**: `lib/request-ip.ts` ignores `x-forwarded-for` unless `TRUST_PROXY=true`, in which case the left-most forwarded entry is used for per-IP rate limiting. Without a trusted proxy, per-IP buckets fall back to a shared global bucket so limits always apply. Set `TRUST_PROXY=true` only when your host's proxy overwrites the header.
-- **Email**: set `EMAIL_MODE=smtp`, `SMTP_HOST/PORT/USER/PASS`, `EMAIL_FROM`, `NEXTAUTH_URL`/`APP_URL` (public base URL used in links), and optionally `CONTACT_NOTIFY_EMAIL`.
+- **Email**: set `EMAIL_MODE=resend`, `RESEND_API_KEY`, `EMAIL_FROM` (a domain verified in Resend), `NEXTAUTH_URL`/`APP_URL` (public base URL used in links), and optionally `CONTACT_NOTIFY_EMAIL`.
 - **Backups**: `node scripts/backup-db.mjs backup [file]` runs `pg_dump` (custom format) against `DIRECT_URL`/`DATABASE_URL`; `node scripts/backup-db.mjs restore <file>` restores with `--clean --if-exists` after a printed warning. Requires the PostgreSQL client tools on PATH and is intended to be scheduled by your host's cron.
 - Rate limits apply on all public forms plus admin/reader login. Deployment-level IP/global request limits at the host/CDN are still recommended before exposing the site to the open internet.
 

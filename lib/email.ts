@@ -1,5 +1,4 @@
-import nodemailer from "nodemailer";
-import type { Transporter } from "nodemailer";
+import { Resend } from "resend";
 
 export interface SendEmailParams {
   to: string;
@@ -8,32 +7,18 @@ export interface SendEmailParams {
   html?: string;
 }
 
-let transporter: Transporter | null = null;
+let resend: Resend | null = null;
 
-function getTransporter(): Transporter {
-  if (transporter) return transporter;
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT ?? 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) {
+function getResend(): Resend {
+  if (resend) return resend;
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
     throw new Error(
-      "SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (and EMAIL_FROM), or set EMAIL_MODE=console.",
+      "Resend is not configured. Set RESEND_API_KEY (and EMAIL_FROM on a domain verified in Resend), or set EMAIL_MODE=console.",
     );
   }
-  transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-    pool: true,
-    maxConnections: 3,
-    maxMessages: 100,
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 20_000,
-  });
-  return transporter;
+  resend = new Resend(apiKey);
+  return resend;
 }
 
 function sender(): string {
@@ -41,13 +26,13 @@ function sender(): string {
 }
 
 /**
- * Sends an email through SMTP. In development (EMAIL_MODE=console) the
- * message is printed to the server log instead of being delivered.
+ * Sends an email through the Resend API. In development (EMAIL_MODE=console)
+ * the message is printed to the server log instead of being delivered.
  */
 export async function sendEmail(params: SendEmailParams): Promise<void> {
   const mode =
     process.env.EMAIL_MODE ??
-    (process.env.NODE_ENV === "production" ? "smtp" : "console");
+    (process.env.NODE_ENV === "production" ? "resend" : "console");
 
   if (mode === "console") {
     console.log("\n===== EMAIL (console mode) =====");
@@ -59,16 +44,19 @@ export async function sendEmail(params: SendEmailParams): Promise<void> {
     return;
   }
 
-  if (mode !== "smtp") {
-    throw new Error(`Unknown EMAIL_MODE "${mode}" (expected "smtp" or "console").`);
+  if (mode !== "resend") {
+    throw new Error(`Unknown EMAIL_MODE "${mode}" (expected "resend" or "console").`);
   }
 
-  const info = await getTransporter().sendMail({
+  const { data, error } = await getResend().emails.send({
     from: sender(),
     to: params.to,
     subject: params.subject,
     text: params.text,
     html: params.html,
   });
-  console.log(`Email sent to ${params.to} (${info.messageId})`);
+  if (error) {
+    throw new Error(`Resend rejected the message: ${error.message}`);
+  }
+  console.log(`Email sent to ${params.to} (${data?.id ?? "no-id"})`);
 }

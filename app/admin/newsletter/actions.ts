@@ -77,7 +77,7 @@ export async function sendNewsletterCampaign(
       },
     });
     if (sent === 0) {
-      return { ok: false, error: "Sending failed for every recipient. Check SMTP settings and try again.", message: "" };
+      return { ok: false, error: "Sending failed for every recipient. Check Resend settings and try again.", message: "" };
     }
     return {
       ok: true,
